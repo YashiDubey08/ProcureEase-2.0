@@ -7,6 +7,8 @@ interface ProgressBarProps {
   showPercentage?: boolean;
   size?: 'sm' | 'md' | 'lg';
   variant?: 'auto' | 'primary' | 'success' | 'warning' | 'danger';
+  color?: string;
+  height?: string;
   className?: string;
 }
 
@@ -14,30 +16,34 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({
   value,
   max = 100,
   label,
-  showPercentage = true,
+  showPercentage = false,
   size = 'md',
   variant = 'auto',
+  color,
+  height,
   className = '',
 }) => {
   const percentage = Math.min(Math.max(Math.round((value / max) * 100), 0), 100);
 
   // Variant resolution
-  let barColor = 'bg-blue-600';
-  if (variant === 'auto') {
-    if (percentage >= 80) barColor = 'bg-emerald-500';
-    else if (percentage >= 50) barColor = 'bg-blue-600';
-    else if (percentage >= 30) barColor = 'bg-amber-500';
-    else barColor = 'bg-rose-500';
-  } else {
-    barColor = {
-      primary: 'bg-blue-600',
-      success: 'bg-emerald-500',
-      warning: 'bg-amber-500',
-      danger: 'bg-rose-500',
-    }[variant];
+  let barColor = color || 'bg-blue-600';
+  if (!color) {
+    if (variant === 'auto') {
+      if (percentage >= 80) barColor = 'bg-emerald-500';
+      else if (percentage >= 50) barColor = 'bg-blue-600';
+      else if (percentage >= 30) barColor = 'bg-amber-500';
+      else barColor = 'bg-rose-500';
+    } else {
+      barColor = {
+        primary: 'bg-blue-600',
+        success: 'bg-emerald-500',
+        warning: 'bg-amber-500',
+        danger: 'bg-rose-500',
+      }[variant];
+    }
   }
 
-  const heightClass = {
+  const heightClass = height || {
     sm: 'h-1.5',
     md: 'h-2.5',
     lg: 'h-3.5',

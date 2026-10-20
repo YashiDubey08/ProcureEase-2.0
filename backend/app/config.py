@@ -7,8 +7,14 @@ load_dotenv(BASE_DIR / ".env")
 
 class Config:
     PROJECT_NAME = "ProcureEase 2.0"
-    SECRET_KEY = os.getenv("SECRET_KEY", "procureease-2-secret-key-hackathon-2026")
+    SECRET_KEY = os.getenv("SECRET_KEY", "procureease-2-secure-random-key-prod-2026")
     
+    # Session Cookie Security
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = "Lax"
+    SESSION_COOKIE_SECURE = os.getenv("FLASK_ENV") == "production"
+    PERMANENT_SESSION_LIFETIME = 7 * 24 * 60 * 60 # 7 days
+
     # SQLite Database Configuration
     INSTANCE_DIR = BASE_DIR / "instance"
     INSTANCE_DIR.mkdir(parents=True, exist_ok=True)
@@ -33,4 +39,5 @@ class Config:
     USE_MOCK_AI = os.getenv("USE_MOCK_AI", "true").lower() in ("true", "1", "yes")
 
     # CORS
-    CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").split(",")
+    cors_raw = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173")
+    CORS_ORIGINS = [orig.strip() for orig in cors_raw.split(",") if orig.strip()]

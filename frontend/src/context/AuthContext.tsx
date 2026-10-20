@@ -12,6 +12,12 @@ interface AuthContextType {
   logout: () => Promise<void>;
   loginDemo: () => Promise<void>;
   refreshProfile: () => Promise<void>;
+  forgotPassword: (email: string) => Promise<{ success: boolean; message: string; dev_reset_token?: string }>;
+  resetPassword: (token: string, new_password: string) => Promise<{ success: boolean; message: string }>;
+  verifyEmail: (token?: string) => Promise<void>;
+  resendVerification: () => Promise<string | undefined>;
+  changePassword: (current_password: string, new_password: string) => Promise<void>;
+  deleteAccount: (password: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -27,27 +33,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (res.authenticated && res.user) {
         setUser(res.user);
         setStartup(res.startup || null);
-        localStorage.setItem('procureease_user_id', res.user.id);
       } else {
-        // Check if there was a saved user in localStorage as fallback
-        const savedId = localStorage.getItem('procureease_user_id');
-        const savedEmail = localStorage.getItem('procureease_user_email');
-        const savedName = localStorage.getItem('procureease_user_name');
-        const savedCompany = localStorage.getItem('procureease_user_company');
-        if (savedId && savedEmail) {
-          setUser({
-            id: savedId,
-            name: savedName || 'Founder',
-            email: savedEmail,
-            company_name: savedCompany || 'Startup'
-          });
-        } else {
-          setUser(null);
-          setStartup(null);
-        }
+        setUser(null);
+        setStartup(null);
       }
     } catch (err) {
-      console.warn('Auth check fallback:', err);
+      console.warn('Authentication check failed:', err);
+      setUser(null);
+      setStartup(null);
     } finally {
       setLoading(false);
     }
@@ -64,10 +57,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (res.user) {
         setUser(res.user);
         setStartup(res.startup || null);
-        localStorage.setItem('procureease_user_id', res.user.id);
-        localStorage.setItem('procureease_user_email', res.user.email);
-        localStorage.setItem('procureease_user_name', res.user.name);
-        localStorage.setItem('procureease_user_company', res.user.company_name);
       }
     } finally {
       setLoading(false);
@@ -81,10 +70,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (res.user) {
         setUser(res.user);
         setStartup(res.startup || null);
-        localStorage.setItem('procureease_user_id', res.user.id);
-        localStorage.setItem('procureease_user_email', res.user.email);
-        localStorage.setItem('procureease_user_name', res.user.name);
-        localStorage.setItem('procureease_user_company', res.user.company_name);
       }
     } finally {
       setLoading(false);
@@ -98,10 +83,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (res.user) {
         setUser(res.user);
         setStartup(res.startup || null);
-        localStorage.setItem('procureease_user_id', res.user.id);
-        localStorage.setItem('procureease_user_email', res.user.email);
-        localStorage.setItem('procureease_user_name', res.user.name);
-        localStorage.setItem('procureease_user_company', res.user.company_name);
       }
     } finally {
       setLoading(false);
@@ -114,10 +95,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch {
       // ignore
     } finally {
-      localStorage.removeItem('procureease_user_id');
-      localStorage.removeItem('procureease_user_email');
-      localStorage.removeItem('procureease_user_name');
-      localStorage.removeItem('procureease_user_company');
       setUser(null);
       setStartup(null);
     }
@@ -132,6 +109,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const forgotPassword = async (email: string) => {
+    return api.forgotPassword(email);
+  };
+
+  const resetPassword = async (token: string, new_password: string) => {
+    return api.resetPassword(token, new_password);
+  };
+
+  const verifyEmail = async (token?: string) => {
+    const res = await api.verifyEmail(token);
+    if (user && res.email_verified) {
+      setUser({ ...user, email_verified: true });
+    }
+  };
+
+  const resendVerification = async () => {
+    const res = await api.resendVerification();
+    return res.dev_verification_token;
+  };
+
+  const changePassword = async (current_password: string, new_password: string) => {
+    await api.changePassword(current_password, new_password);
+  };
+
+  const deleteAccount = async (password: string) => {
+    await api.deleteAccount(password);
+    setUser(null);
+    setStartup(null);
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -143,7 +150,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         register,
         logout,
         loginDemo,
-        refreshProfile
+        refreshProfile,
+        forgotPassword,
+        resetPassword,
+        verifyEmail,
+        resendVerification,
+        changePassword,
+        deleteAccount
       }}
     >
       {children}

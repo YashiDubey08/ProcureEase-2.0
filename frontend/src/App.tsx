@@ -6,15 +6,10 @@ import { LandingPage } from './pages/LandingPage';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { AppLayout } from './components/layout/AppLayout';
-import { DashboardPage } from './pages/DashboardPage';
-import { StartupProfilePage } from './pages/StartupProfilePage';
-import { TendersPage } from './pages/TendersPage';
+import { OverviewPage } from './pages/OverviewPage';
+import { RoadmapPage } from './pages/RoadmapPage';
 import { DocumentsPage } from './pages/DocumentsPage';
-import { EligibilityPage } from './pages/EligibilityPage';
-import { ChecklistPage } from './pages/ChecklistPage';
-import { ReadinessPage } from './pages/ReadinessPage';
-import { ApplicationsPage } from './pages/ApplicationsPage';
-import { FinancePage } from './pages/FinancePage';
+import { StartupProfilePage } from './pages/StartupProfilePage';
 import { SettingsPage } from './pages/SettingsPage';
 
 export const App: React.FC = () => {
@@ -30,17 +25,20 @@ export const App: React.FC = () => {
           {/* Protected Startup Workspace Routes */}
           <Route element={<ProtectedRoute />}>
             <Route element={<AppLayout />}>
-              <Route path="/dashboard" element={<DashboardPage />} />
-              <Route path="/roadmap" element={<DashboardPage />} />
-              <Route path="/profile" element={<StartupProfilePage />} />
-              <Route path="/tenders" element={<TendersPage />} />
+              <Route path="/dashboard" element={<OverviewPage />} />
+              <Route path="/overview" element={<OverviewPage />} />
+              <Route path="/roadmap" element={<RoadmapPage />} />
               <Route path="/documents" element={<DocumentsPage />} />
-              <Route path="/eligibility" element={<EligibilityPage />} />
-              <Route path="/checklist" element={<ChecklistPage />} />
-              <Route path="/readiness" element={<ReadinessPage />} />
-              <Route path="/applications" element={<ApplicationsPage />} />
-              <Route path="/finance" element={<FinancePage />} />
+              <Route path="/profile" element={<StartupProfilePage />} />
               <Route path="/settings" element={<SettingsPage />} />
+
+              {/* Seamless redirects for legacy routes to keep existing bookmarks functional */}
+              <Route path="/checklist" element={<Navigate to="/documents" replace />} />
+              <Route path="/tenders" element={<Navigate to="/roadmap" replace />} />
+              <Route path="/readiness" element={<Navigate to="/dashboard" replace />} />
+              <Route path="/eligibility" element={<Navigate to="/roadmap" replace />} />
+              <Route path="/applications" element={<Navigate to="/roadmap" replace />} />
+              <Route path="/finance" element={<Navigate to="/roadmap" replace />} />
             </Route>
           </Route>
 

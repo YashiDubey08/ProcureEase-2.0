@@ -21,6 +21,13 @@ export interface StartupProfile {
   email: string;
   phone: string;
   sector: string;
+  business_domain?: string;
+  state_location?: string;
+  business_structure?: string;
+  has_employees?: boolean;
+  has_physical_premises?: boolean;
+  is_interstate_or_ecommerce?: boolean;
+  creates_ip?: boolean;
   product_description: string;
   company_stage: string;
   dpiit_status: boolean;
@@ -50,7 +57,7 @@ export interface ProfileCompletionField {
 export interface ProfileCompletion {
   percentage: number;
   completed_count: number;
-  partial_count: number;
+  partial_count?: number;
   missing_count: number;
   breakdown: ProfileCompletionField[];
 }
@@ -58,13 +65,31 @@ export interface ProfileCompletion {
 export interface StartupDocument {
   id: string;
   startup_id?: string;
+  user_id?: string;
+  step_key?: string;
   filename: string;
   original_filename: string;
   category: string;
   file_size_bytes: number;
   page_count: number;
   status: string;
+  preparation_status?: 'NOT_PREPARED' | 'DRAFT' | 'PREPARED_LOCAL' | 'UPLOADED';
+  is_required?: boolean;
+  mime_type?: string;
   upload_date?: string;
+}
+
+export interface ChecklistDocumentItem {
+  id: string;
+  name: string;
+  category: string;
+  step_key: string;
+  step_title: string;
+  step_number: number;
+  is_required: boolean;
+  explanation: string;
+  preparation_status: 'NOT_PREPARED' | 'DRAFT' | 'PREPARED_LOCAL' | 'UPLOADED';
+  uploaded_file?: StartupDocument | null;
 }
 
 export interface TenderMetadata {
@@ -238,23 +263,46 @@ export interface BackendHealthResponse {
 
 // Guided Procurement Journey Types
 
-export type StepStatus = 'LOCKED' | 'IN_PROGRESS' | 'COMPLETED';
+export type StepStatus = 
+  | 'NOT_STARTED' 
+  | 'IN_PROGRESS' 
+  | 'SUBMITTED' 
+  | 'COMPLETED' 
+  | 'NEEDS_ATTENTION' 
+  | 'LOCKED';
+
+export interface RequiredDocumentDef {
+  name: string;
+  category: string;
+  is_required: boolean;
+  explanation: string;
+}
 
 export interface RoadmapStepItem {
   id: string;
+  step_key: string;
   step_number: number;
   title: string;
   short_title: string;
   category: string;
   description: string;
+  why_necessary?: string;
+  applicability?: string;
   required_action: string;
+  required_documents?: RequiredDocumentDef[];
   official_portal_name: string;
   official_portal_url: string;
+  verification_source?: string;
+  last_verified_date?: string;
+  estimated_duration?: string;
+  prerequisites?: string[];
   internal_route: string;
   status: StepStatus;
   progress_pct: number;
-  evidence_reference: string;
-  notes: string;
+  evidence_reference?: string;
+  reference_number?: string;
+  submission_date?: string;
+  notes?: string;
   completed_at?: string | null;
 }
 
@@ -263,8 +311,13 @@ export interface RoadmapResponse {
   total_steps: number;
   completed_count: number;
   in_progress_count: number;
+  submitted_count?: number;
+  needs_attention_count?: number;
+  not_started_count?: number;
   overall_progress_pct: number;
   current_step: RoadmapStepItem | null;
+  next_recommended_action?: RoadmapStepItem | null;
+  pending_steps?: RoadmapStepItem[];
 }
 
 export interface DiscoveryTender {
@@ -353,6 +406,7 @@ export interface User {
   email: string;
   company_name: string;
   is_demo?: boolean;
+  email_verified?: boolean;
   created_at?: string;
 }
 

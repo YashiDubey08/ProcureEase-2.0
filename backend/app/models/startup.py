@@ -17,7 +17,16 @@ class Startup(Base):
     email = Column(String(255), default="")
     phone = Column(String(50), default="")
     sector = Column(String(255), default="")
+    business_domain = Column(String(100), default="Technology")
+    state_location = Column(String(100), default="")
+    business_structure = Column(String(100), default="Private Limited Company")
     product_description = Column(Text, default="")
+
+    # Operational & Legal Applicability Factors
+    has_employees = Column(Boolean, default=False)
+    has_physical_premises = Column(Boolean, default=False)
+    is_interstate_or_ecommerce = Column(Boolean, default=False)
+    creates_ip = Column(Boolean, default=True)
 
     # Business Information
     company_stage = Column(String(100), default="") # Ideation, Early Stage, Seed, Growth, Scaled
@@ -60,8 +69,15 @@ class Startup(Base):
             "email": self.email,
             "phone": self.phone,
             "sector": self.sector,
+            "business_domain": self.business_domain or self.sector or "Technology",
+            "state_location": self.state_location or "",
+            "business_structure": self.business_structure or "Private Limited Company",
+            "has_employees": bool(self.has_employees),
+            "has_physical_premises": bool(self.has_physical_premises),
+            "is_interstate_or_ecommerce": bool(self.is_interstate_or_ecommerce),
+            "creates_ip": bool(self.creates_ip),
             "product_description": self.product_description,
-            "company_stage": self.company_stage or "",
+            "company_stage": self.company_stage or "Early Stage",
             "dpiit_status": bool(self.dpiit_status),
             "dpiit_number": self.dpiit_number or "",
             "msme_status": bool(self.msme_status),
@@ -85,17 +101,17 @@ class Document(Base):
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     startup_id = Column(String(36), ForeignKey("startups.id"), nullable=True)
     user_id = Column(String(36), nullable=True, index=True)
+    step_key = Column(String(50), nullable=True)
     filename = Column(String(255), nullable=False)
     original_filename = Column(String(255), nullable=False)
     category = Column(String(100), nullable=False)
-    # Categories:
-    # GST Certificate, MSME/Udyam Certificate, DPIIT Certificate,
-    # Company Registration, ISO Certificate, Experience/Project Proof,
-    # Product/Technical Documents, Other Documents
     file_path = Column(String(500), default="")
     file_size_bytes = Column(Integer, default=0)
     page_count = Column(Integer, default=1)
-    status = Column(String(50), default="Available for Evidence Mapping") # Uploaded, Available for Evidence Mapping
+    status = Column(String(50), default="Available for Evidence Mapping")
+    preparation_status = Column(String(50), default="UPLOADED") # NOT_PREPARED, DRAFT, PREPARED_LOCAL, UPLOADED
+    is_required = Column(Boolean, default=True)
+    mime_type = Column(String(100), default="")
     upload_date = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     startup = relationship("Startup", back_populates="documents")
@@ -105,11 +121,15 @@ class Document(Base):
             "id": self.id,
             "startup_id": self.startup_id,
             "user_id": self.user_id,
+            "step_key": self.step_key,
             "filename": self.filename,
             "original_filename": self.original_filename,
             "category": self.category,
             "file_size_bytes": self.file_size_bytes,
             "page_count": self.page_count,
             "status": self.status,
+            "preparation_status": self.preparation_status or "UPLOADED",
+            "is_required": bool(self.is_required),
+            "mime_type": self.mime_type or "",
             "upload_date": self.upload_date.isoformat() if self.upload_date else None,
         }

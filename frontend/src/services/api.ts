@@ -3,20 +3,13 @@ import type {
   StartupProfile, 
   ProfileCompletion, 
   StartupDocument, 
+  ChecklistDocumentItem,
   TenderMetadata, 
-  ExtractedRequirement, 
   ExplainableMatchResult, 
-  EligibilityGapItem, 
-  EvidenceMappingItem, 
   ActionPlanItem, 
   ReadinessScoreResult, 
-  PreBidAuditResult, 
-  TenderChangesResult,
   RoadmapResponse,
   RoadmapStepItem,
-  DiscoveryTendersResponse,
-  FinancialSchemesResponse,
-  ApplicationRecordItem,
   ApplicationsResponse,
   User,
   AuthResponse
@@ -25,11 +18,7 @@ import type {
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
 async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
-  const storedUserId = localStorage.getItem('procureease_user_id');
   const headers = new Headers(options?.headers || {});
-  if (storedUserId && !headers.has('X-User-Id')) {
-    headers.set('X-User-Id', storedUserId);
-  }
 
   const response = await fetch(url, {
     ...options,
@@ -42,6 +31,7 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
     try {
       const errData = await response.json();
       if (errData && errData.error) errorMsg = errData.error;
+      else if (errData && errData.message) errorMsg = errData.message;
     } catch {
       errorMsg = response.statusText || errorMsg;
     }
@@ -51,7 +41,7 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  // Authentication
+  // Authentication & Account Security
   async register(data: { name: string; email: string; password: string; company_name: string }): Promise<AuthResponse> {
     return fetchJson(`${API_BASE_URL}/auth/register`, {
       method: 'POST',
@@ -86,6 +76,52 @@ export const api = {
     });
   },
 
+  async forgotPassword(email: string): Promise<{ success: boolean; message: string; dev_reset_token?: string }> {
+    return fetchJson(`${API_BASE_URL}/auth/forgot-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email })
+    });
+  },
+
+  async resetPassword(token: string, new_password: string): Promise<{ success: boolean; message: string }> {
+    return fetchJson(`${API_BASE_URL}/auth/reset-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, new_password })
+    });
+  },
+
+  async verifyEmail(token?: string): Promise<{ success: boolean; message: string; email_verified: boolean }> {
+    return fetchJson(`${API_BASE_URL}/auth/verify-email`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: token || '' })
+    });
+  },
+
+  async resendVerification(): Promise<{ success: boolean; message: string; dev_verification_token?: string }> {
+    return fetchJson(`${API_BASE_URL}/auth/resend-verification`, {
+      method: 'POST'
+    });
+  },
+
+  async changePassword(current_password: string, new_password: string): Promise<{ success: boolean; message: string }> {
+    return fetchJson(`${API_BASE_URL}/auth/change-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ current_password, new_password })
+    });
+  },
+
+  async deleteAccount(password: string): Promise<{ success: boolean; message: string }> {
+    return fetchJson(`${API_BASE_URL}/auth/delete-account`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password })
+    });
+  },
+
   // System Health
   async getHealth(): Promise<BackendHealthResponse> {
     return fetchJson<BackendHealthResponse>(`${API_BASE_URL}/health`);
@@ -104,8 +140,17 @@ export const api = {
     });
   },
 
-  // Document Vault
-  async getDocuments(): Promise<{ documents: StartupDocument[]; total_count: number; category_summary: Record<string, number>; valid_categories: string[] }> {
+  // Document Vault & Personalized Checklist
+  async getDocuments(): Promise<{ 
+    documents: StartupDocument[]; 
+    total_count: number; 
+    checklist: ChecklistDocumentItem[];
+    checklist_total: number;
+    prepared_count: number;
+    missing_count: number;
+    category_summary: Record<string, number>; 
+    valid_categories: string[];
+  }> {
     return fetchJson(`${API_BASE_URL}/documents`);
   },
 
@@ -116,111 +161,38 @@ export const api = {
     });
   },
 
+  async updateDocumentStatus(data: { name: string; status: string; step_key?: string; category?: string }): Promise<{ success: boolean; message: string; document: StartupDocument }> {
+    return fetchJson(`${API_BASE_URL}/documents/status`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+  },
+
   async deleteDocument(documentId: string): Promise<{ success: boolean; message: string }> {
     return fetchJson(`${API_BASE_URL}/documents/${documentId}`, {
       method: 'DELETE'
     });
   },
 
-  // Tenders
-  async getTenders(): Promise<{ tenders: TenderMetadata[]; total_count: number }> {
-    return fetchJson(`${API_BASE_URL}/tenders`);
+  getDocumentDownloadUrl(documentId: string): string {
+    return `${API_BASE_URL}/documents/${documentId}/download`;
   },
 
-  async uploadTender(formData: FormData): Promise<{ success: boolean; message: string; tender: TenderMetadata }> {
-    return fetchJson(`${API_BASE_URL}/tenders/upload`, {
-      method: 'POST',
-      body: formData
-    });
-  },
-
-  async loadSampleTender(): Promise<{ success: boolean; message: string; tender: TenderMetadata }> {
-    return fetchJson(`${API_BASE_URL}/tenders/sample`, {
-      method: 'POST'
-    });
-  },
-
-  async deleteTender(tenderId: string): Promise<{ success: boolean; message: string }> {
-    return fetchJson(`${API_BASE_URL}/tenders/${encodeURIComponent(tenderId)}`, {
-      method: 'DELETE'
-    });
-  },
-
-  // Analysis Pipeline
-  async getRequirements(tenderId: string): Promise<{ requirements: ExtractedRequirement[]; total_count: number; source: string }> {
-    return fetchJson(`${API_BASE_URL}/tenders/${encodeURIComponent(tenderId)}/requirements`);
-  },
-
-  async decodeTender(tenderId: string): Promise<{ success: boolean; mode: string; total_extracted: number; requirements: ExtractedRequirement[] }> {
-    return fetchJson(`${API_BASE_URL}/tenders/${encodeURIComponent(tenderId)}/decode`, {
-      method: 'POST'
-    });
-  },
-
-  async getMatch(tenderId: string): Promise<ExplainableMatchResult> {
-    return fetchJson(`${API_BASE_URL}/tenders/${encodeURIComponent(tenderId)}/match`);
-  },
-
-  async getEligibility(tenderId: string): Promise<{ eligibility_matrix: EligibilityGapItem[]; total_items: number; disclaimer: string }> {
-    return fetchJson(`${API_BASE_URL}/tenders/${encodeURIComponent(tenderId)}/eligibility`);
-  },
-
-  async getEvidence(tenderId: string): Promise<{ evidence_mappings: EvidenceMappingItem[]; total_count: number }> {
-    return fetchJson(`${API_BASE_URL}/tenders/${encodeURIComponent(tenderId)}/evidence`);
-  },
-
-  async saveEvidence(tenderId: string, mapping: Partial<EvidenceMappingItem>): Promise<{ success: boolean; message: string; mapping: EvidenceMappingItem }> {
-    return fetchJson(`${API_BASE_URL}/tenders/${encodeURIComponent(tenderId)}/evidence`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(mapping)
-    });
-  },
-
-  async getActions(tenderId: string): Promise<{ actions: ActionPlanItem[]; total_count: number }> {
-    return fetchJson(`${API_BASE_URL}/tenders/${encodeURIComponent(tenderId)}/actions`);
-  },
-
-  async updateActionStatus(tenderId: string, actionId: string, status: string): Promise<{ success: boolean; message: string; action_id: string; new_status: string; updated_readiness: ReadinessScoreResult }> {
-    return fetchJson(`${API_BASE_URL}/tenders/${encodeURIComponent(tenderId)}/actions/${encodeURIComponent(actionId)}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status })
-    });
-  },
-
-  async getReadiness(tenderId: string): Promise<ReadinessScoreResult> {
-    return fetchJson(`${API_BASE_URL}/tenders/${encodeURIComponent(tenderId)}/readiness`);
-  },
-
-  async getAudit(tenderId: string): Promise<PreBidAuditResult> {
-    return fetchJson(`${API_BASE_URL}/tenders/${encodeURIComponent(tenderId)}/audit`);
-  },
-
-  async getChanges(tenderId: string): Promise<TenderChangesResult> {
-    return fetchJson(`${API_BASE_URL}/tenders/${encodeURIComponent(tenderId)}/changes`);
-  },
-
-  // 1-Click Demo Management
-  async loadDemoData(): Promise<{ success: boolean; message: string; startup: StartupProfile; tender: TenderMetadata }> {
-    return fetchJson(`${API_BASE_URL}/demo/load`, {
-      method: 'POST'
-    });
-  },
-
-  async resetDemoData(): Promise<{ success: boolean; message: string }> {
-    return fetchJson(`${API_BASE_URL}/demo/reset`, {
-      method: 'POST'
-    });
-  },
-
-  // Guided Procurement Journey APIs
+  // Personalized Roadmap
   async getRoadmap(): Promise<RoadmapResponse> {
-    return fetchJson(`${API_BASE_URL}/journey/roadmap`);
+    return fetchJson<RoadmapResponse>(`${API_BASE_URL}/journey/roadmap`);
   },
 
-  async updateRoadmapStep(stepId: string, data: Partial<RoadmapStepItem>): Promise<{ success: boolean; message: string; step: RoadmapStepItem }> {
-    return fetchJson(`${API_BASE_URL}/journey/roadmap/${encodeURIComponent(stepId)}`, {
+  async updateRoadmapStep(stepId: string, data: { 
+    status?: string; 
+    reference_number?: string; 
+    evidence_reference?: string; 
+    submission_date?: string; 
+    notes?: string; 
+    progress_pct?: number;
+  }): Promise<{ success: boolean; message: string; step: RoadmapStepItem }> {
+    return fetchJson(`${API_BASE_URL}/journey/roadmap/${stepId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
@@ -233,37 +205,99 @@ export const api = {
     });
   },
 
-  async getDiscoveryTenders(params?: { sector?: string; search?: string; min_score?: number }): Promise<DiscoveryTendersResponse> {
-    const searchParams = new URLSearchParams();
-    if (params?.sector) searchParams.set('sector', params.sector);
-    if (params?.search) searchParams.set('search', params.search);
-    if (params?.min_score !== undefined) searchParams.set('min_score', params.min_score.toString());
-    const query = searchParams.toString();
-    return fetchJson(`${API_BASE_URL}/journey/tenders/discovery${query ? `?${query}` : ''}`);
+  // Legacy compatibility APIs
+  async getTenders(): Promise<{ tenders: TenderMetadata[]; total_count: number }> {
+    return fetchJson(`${API_BASE_URL}/tenders`);
+  },
+
+  async getDiscoveryTenders(params?: { sector?: string; search?: string }): Promise<any> {
+    const q = new URLSearchParams();
+    if (params?.sector) q.set('sector', params.sector);
+    if (params?.search) q.set('search', params.search);
+    return fetchJson(`${API_BASE_URL}/journey/tenders/discovery?${q.toString()}`);
+  },
+
+  async getRequirements(tenderId: string): Promise<any> {
+    return fetchJson(`${API_BASE_URL}/tenders/${tenderId}/requirements`);
+  },
+
+  async getEvidence(tenderId: string): Promise<any> {
+    return fetchJson(`${API_BASE_URL}/tenders/${tenderId}/evidence`);
+  },
+
+  async getChanges(tenderId: string): Promise<any> {
+    return fetchJson(`${API_BASE_URL}/tenders/${tenderId}/changes`);
+  },
+
+  async loadSampleTender(): Promise<any> {
+    return fetchJson(`${API_BASE_URL}/tenders/sample`, { method: 'POST' });
+  },
+
+  async uploadTender(formData: FormData): Promise<any> {
+    return fetchJson(`${API_BASE_URL}/tenders/upload`, { method: 'POST', body: formData });
+  },
+
+  async getReadiness(tenderId: string): Promise<ReadinessScoreResult> {
+    return fetchJson<ReadinessScoreResult>(`${API_BASE_URL}/tenders/${tenderId}/readiness`);
+  },
+
+  async getAudit(tenderId: string): Promise<any> {
+    return fetchJson(`${API_BASE_URL}/tenders/${tenderId}/audit`);
+  },
+
+  async getEligibility(tenderId: string): Promise<any> {
+    return fetchJson(`${API_BASE_URL}/tenders/${tenderId}/eligibility`);
+  },
+
+  async getFinanceSchemes(): Promise<any> {
+    return fetchJson(`${API_BASE_URL}/journey/finance/schemes`);
+  },
+
+  async getMatch(tenderId: string): Promise<ExplainableMatchResult> {
+    return fetchJson<ExplainableMatchResult>(`${API_BASE_URL}/tenders/${tenderId}/match`);
+  },
+
+  async getActions(tenderId: string): Promise<{ actions: ActionPlanItem[]; total_count: number }> {
+    return fetchJson(`${API_BASE_URL}/tenders/${tenderId}/actions`);
   },
 
   async getApplications(): Promise<ApplicationsResponse> {
-    return fetchJson(`${API_BASE_URL}/journey/applications`);
+    return fetchJson<ApplicationsResponse>(`${API_BASE_URL}/journey/applications`);
   },
 
-  async createApplication(appData: Partial<ApplicationRecordItem>): Promise<{ success: boolean; message: string; application: ApplicationRecordItem }> {
+  async createApplication(data: any): Promise<any> {
     return fetchJson(`${API_BASE_URL}/journey/applications`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(appData)
+      body: JSON.stringify(data)
     });
   },
 
-  async updateApplication(appId: string, appData: Partial<ApplicationRecordItem>): Promise<{ success: boolean; message: string; application: ApplicationRecordItem }> {
-    return fetchJson(`${API_BASE_URL}/journey/applications/${encodeURIComponent(appId)}`, {
+  async updateApplication(id: string | number, data: any): Promise<any> {
+    return fetchJson(`${API_BASE_URL}/journey/applications/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(appData)
+      body: JSON.stringify(data)
     });
   },
 
-  async getFinanceSchemes(): Promise<FinancialSchemesResponse> {
-    return fetchJson(`${API_BASE_URL}/journey/finance/schemes`);
+  async updateActionStatus(arg1: string | number, arg2: string, arg3?: string): Promise<any> {
+    const actionId = arg3 ? arg2 : arg1;
+    const finalStatus = arg3 ? arg3 : arg2;
+    const tenderId = arg3 ? arg1 : null;
+    const url = tenderId 
+      ? `${API_BASE_URL}/tenders/${tenderId}/actions/${actionId}/status`
+      : `${API_BASE_URL}/actions/${actionId}/status`;
+    return fetchJson(url, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: finalStatus })
+    });
+  },
+
+  async loadDemoData(): Promise<{ success: boolean; message: string }> {
+    return fetchJson(`${API_BASE_URL}/demo/load`, {
+      method: 'POST'
+    });
   }
 };
-

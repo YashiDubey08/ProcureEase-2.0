@@ -1,478 +1,419 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Files, 
   Upload, 
   Trash2, 
-  FileText, 
-  CheckCircle2, 
-  AlertTriangle, 
-  RefreshCw, 
-  Sparkles,
-  ArrowRight,
-  Filter,
-  Info
+  Download, 
+  Search,
+  RefreshCw,
+  X
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { PageHeader } from '../components/common/PageHeader';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../components/common/Card';
-import { Button } from '../components/common/Button';
-import { StatusBadge } from '../components/common/StatusBadge';
 import { api } from '../services/api';
-import type { StartupDocument } from '../types';
-
-const CATEGORIES = [
-  'DPIIT Startup Recognition',
-  'MSME / Udyam Certificate',
-  'GST Certificate',
-  'ISO 9001 Certificate',
-  'Past Work Order & Completion Proof',
-  'Audited Financial Statement',
-  'Technical Product Datasheet',
-  'Other Supporting Document'
-];
+import type { ChecklistDocumentItem } from '../types';
+import { ProgressBar } from '../components/common/ProgressBar';
 
 export const DocumentsPage: React.FC = () => {
-  const [documents, setDocuments] = useState<StartupDocument[]>([]);
-  const [totalCount, setTotalCount] = useState<number>(0);
-  const [categorySummary, setCategorySummary] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState<boolean>(true);
-  const [uploading, setUploading] = useState<boolean>(false);
-  const [selectedCategory, setSelectedCategory] = useState<string>(CATEGORIES[0]);
-  const [fileToUpload, setFileToUpload] = useState<File | null>(null);
-  const [filterCategory, setFilterCategory] = useState<string>('ALL');
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [successMsg, setSuccessMsg] = useState<string | null>(null);
-  const [showUploadModal, setShowUploadModal] = useState<boolean>(false);
+  const [checklist, setChecklist] = useState<ChecklistDocumentItem[]>([]);
+  const [totalCount, setTotalCount] = useState<number>(0);
+  const [preparedCount, setPreparedCount] = useState<number>(0);
 
-  const fetchDocuments = async () => {
+  const [filterCategory, setFilterCategory] = useState<string>('ALL');
+  const [filterStatus, setFilterStatus] = useState<string>('ALL');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+
+  // Upload modal states
+  const [showUploadModal, setShowUploadModal] = useState<boolean>(false);
+  const [selectedChecklistItem, setSelectedChecklistItem] = useState<ChecklistDocumentItem | null>(null);
+  const [fileToUpload, setFileToUpload] = useState<File | null>(null);
+  const [uploadCategory, setUploadCategory] = useState<string>('Legal & Incorporation');
+  const [uploading, setUploading] = useState<boolean>(false);
+
+  const [notification, setNotification] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const fetchDocumentsData = async () => {
     try {
       setLoading(true);
-      setErrorMsg(null);
+      setNotification(null);
       const res = await api.getDocuments();
-      setDocuments(res.documents || []);
-      setTotalCount(res.total_count || 0);
-      setCategorySummary(res.category_summary || {});
+      setChecklist(res.checklist || []);
+      setTotalCount(res.checklist_total || res.checklist?.length || 0);
+      setPreparedCount(res.prepared_count || 0);
     } catch (err: any) {
       console.error('Failed to load documents:', err);
-      setErrorMsg(err.message || 'Unable to load document vault.');
+      setNotification({ type: 'error', text: err.message || 'Unable to load document checklist.' });
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchDocuments();
+    fetchDocumentsData();
   }, []);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setFileToUpload(e.target.files[0]);
-      setErrorMsg(null);
+  const handleUpdateStatus = async (item: ChecklistDocumentItem, newStatus: string) => {
+    try {
+      await api.updateDocumentStatus({
+        name: item.name,
+        status: newStatus,
+        step_key: item.step_key,
+        category: item.category
+      });
+      setNotification({
+        type: 'success',
+        text: `Updated status for '${item.name}'.`
+      });
+      await fetchDocumentsData();
+    } catch (err: any) {
+      console.error('Failed to update status:', err);
+      setNotification({ type: 'error', text: err.message || 'Failed to update preparation status.' });
     }
   };
 
-  const handleUpload = async (e: React.FormEvent) => {
+  const handleUploadSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!fileToUpload) {
-      setErrorMsg('Please select a file to upload.');
+      setNotification({ type: 'error', text: 'Please select a file to upload.' });
+      return;
+    }
+
+    const ext = fileToUpload.name.split('.').pop()?.toLowerCase();
+    if (!['pdf', 'png', 'jpg', 'jpeg'].includes(ext || '')) {
+      setNotification({ type: 'error', text: 'Allowed formats: .pdf, .png, .jpg, .jpeg' });
+      return;
+    }
+
+    if (fileToUpload.size > 15 * 1024 * 1024) {
+      setNotification({ type: 'error', text: 'File size exceeds the 15 MB limit.' });
       return;
     }
 
     try {
       setUploading(true);
-      setErrorMsg(null);
-      setSuccessMsg(null);
+      setNotification(null);
 
       const formData = new FormData();
       formData.append('file', fileToUpload);
-      formData.append('category', selectedCategory);
+      formData.append('category', selectedChecklistItem?.category || uploadCategory);
+      if (selectedChecklistItem?.step_key) {
+        formData.append('step_key', selectedChecklistItem.step_key);
+      }
 
       const res = await api.uploadDocument(formData);
-      setSuccessMsg(res.message || 'Document uploaded and indexed successfully.');
+      setNotification({
+        type: 'success',
+        text: res.message || 'File uploaded successfully.'
+      });
+
       setFileToUpload(null);
       setShowUploadModal(false);
-      await fetchDocuments();
+      setSelectedChecklistItem(null);
+      await fetchDocumentsData();
     } catch (err: any) {
       console.error('Upload failed:', err);
-      setErrorMsg(err.message || 'Failed to upload document.');
+      setNotification({ type: 'error', text: err.message || 'File upload failed.' });
     } finally {
       setUploading(false);
     }
   };
 
-  const handleDelete = async (docId: string, docName: string) => {
-    if (!window.confirm(`Are you sure you want to remove "${docName}" from your vault?`)) {
-      return;
-    }
-
+  const handleDeleteUploadedFile = async (docId: string, docName: string) => {
+    if (!window.confirm(`Delete stored file '${docName}'?`)) return;
     try {
-      setErrorMsg(null);
-      const res = await api.deleteDocument(docId);
-      setSuccessMsg(res.message || 'Document deleted.');
-      await fetchDocuments();
+      await api.deleteDocument(docId);
+      setNotification({ type: 'success', text: `Deleted '${docName}'.` });
+      await fetchDocumentsData();
     } catch (err: any) {
       console.error('Delete failed:', err);
-      setErrorMsg(err.message || 'Failed to delete document.');
+      setNotification({ type: 'error', text: err.message || 'Failed to delete file.' });
     }
   };
 
-  const handleSeedDemo = async () => {
-    try {
-      setLoading(true);
-      setErrorMsg(null);
-      await api.loadDemoData();
-      setSuccessMsg('Loaded standard SmartSense Technologies demo documents!');
-      await fetchDocuments();
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Failed to seed demo data.');
-    } finally {
-      setLoading(false);
+  const openUploadForItem = (item: ChecklistDocumentItem) => {
+    setSelectedChecklistItem(item);
+    setUploadCategory(item.category);
+    setShowUploadModal(true);
+  };
+
+  const allCategories = Array.from(new Set(checklist.map(c => c.category).filter(Boolean)));
+
+  const filteredChecklist = checklist.filter(item => {
+    if (filterCategory !== 'ALL' && item.category !== filterCategory) return false;
+    if (filterStatus === 'PREPARED' && !['PREPARED_LOCAL', 'UPLOADED'].includes(item.preparation_status)) return false;
+    if (filterStatus === 'MISSING' && ['PREPARED_LOCAL', 'UPLOADED'].includes(item.preparation_status)) return false;
+    if (filterStatus === 'REQUIRED' && !item.is_required) return false;
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      const match = item.name.toLowerCase().includes(q) ||
+                    item.category.toLowerCase().includes(q) ||
+                    item.step_title.toLowerCase().includes(q) ||
+                    item.explanation.toLowerCase().includes(q);
+      if (!match) return false;
     }
-  };
+    return true;
+  });
 
-  const filteredDocs = filterCategory === 'ALL'
-    ? documents
-    : documents.filter(doc => doc.category.toLowerCase().includes(filterCategory.toLowerCase()));
-
-  const formatFileSize = (bytes: number): string => {
-    if (!bytes || bytes === 0) return '0 KB';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
-  };
+  const prepPercentage = totalCount > 0 ? Math.round((preparedCount / totalCount) * 100) : 0;
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Document Vault"
-        description="Securely store and index regulatory certificates, financial statements, and technical proofs for Tender-to-Evidence mapping."
-        breadcrumbs={[
-          { label: 'Dashboard', href: '/dashboard' },
-          { label: 'Document Vault' },
-        ]}
-        actions={
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              icon={RefreshCw}
-              onClick={fetchDocuments}
-              loading={loading}
-            >
-              Refresh
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              icon={Sparkles}
-              onClick={handleSeedDemo}
-            >
-              Load Demo Proofs
-            </Button>
-            <Button
-              variant="primary"
-              size="sm"
-              icon={Upload}
-              onClick={() => setShowUploadModal(true)}
-            >
-              Upload Document
-            </Button>
-          </div>
-        }
-      />
-
-      {/* Notifications */}
-      {errorMsg && (
-        <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-sm flex items-start gap-3 animate-fadeIn">
-          <AlertTriangle className="w-5 h-5 text-rose-500 shrink-0 mt-0.5" />
-          <div className="flex-1 font-medium">{errorMsg}</div>
-          <button onClick={() => setErrorMsg(null)} className="text-rose-500 hover:text-rose-700 text-xs font-bold">DISMISS</button>
-        </div>
-      )}
-
-      {successMsg && (
-        <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex items-start gap-3 animate-fadeIn">
-          <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0 mt-0.5" />
-          <div className="flex-1 font-medium">{successMsg}</div>
-          <button onClick={() => setSuccessMsg(null)} className="text-emerald-500 hover:text-emerald-700 text-xs font-bold">DISMISS</button>
-        </div>
-      )}
-
-      {/* Vault Status Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="bg-gradient-to-br from-blue-50/60 to-white">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-blue-700 uppercase tracking-wider">Total Stored</span>
-              <span className="p-2 bg-blue-100 rounded-lg text-blue-700">
-                <Files className="w-4 h-4" />
-              </span>
-            </div>
-            <div className="mt-3">
-              <div className="text-2xl font-bold text-slate-900">{totalCount}</div>
-              <div className="text-xs text-slate-500 mt-1">Proof artifacts indexed</div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-gradient-to-br from-emerald-50/60 to-white">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-emerald-700 uppercase tracking-wider">Statutory Proofs</span>
-              <span className="p-2 bg-emerald-100 rounded-lg text-emerald-700">
-                <CheckCircle2 className="w-4 h-4" />
-              </span>
-            </div>
-            <div className="mt-3">
-              <div className="text-2xl font-bold text-slate-900">
-                {(categorySummary['DPIIT Startup Recognition'] || 0) + (categorySummary['MSME / Udyam Certificate'] || 0) + (categorySummary['GST Certificate'] || 0)}
-              </div>
-              <div className="text-xs text-slate-500 mt-1">DPIIT, Udyam, & GST active</div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-gradient-to-br from-amber-50/60 to-white">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-amber-700 uppercase tracking-wider">Quality Certs</span>
-              <span className="p-2 bg-amber-100 rounded-lg text-amber-700">
-                <AlertTriangle className="w-4 h-4" />
-              </span>
-            </div>
-            <div className="mt-3">
-              <div className="text-2xl font-bold text-slate-900">
-                {categorySummary['ISO 9001 Certificate'] || 0}
-              </div>
-              <div className="text-xs text-slate-500 mt-1">ISO 9001:2015 certification</div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-gradient-to-br from-indigo-50/60 to-white">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-indigo-700 uppercase tracking-wider">Evidence Status</span>
-              <span className="p-2 bg-indigo-100 rounded-lg text-indigo-700">
-                <Sparkles className="w-4 h-4" />
-              </span>
-            </div>
-            <div className="mt-3">
-              <div className="text-2xl font-bold text-slate-900">{totalCount > 0 ? 'Ready' : 'Pending'}</div>
-              <div className="text-xs text-slate-500 mt-1">{totalCount > 0 ? 'Linked to Tender Engine' : 'No documents uploaded'}</div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Info Banner */}
-      <div className="p-4 rounded-xl bg-blue-50/70 border border-blue-200 text-blue-900 text-sm flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <Info className="w-5 h-5 text-blue-600 shrink-0" />
-          <p>
-            <strong>Tender-to-Action Principle:</strong> Documents in this vault are parsed by PyMuPDF and automatically matched to tender criteria in the <strong>Requirement $\to$ Evidence Engine</strong>.
-          </p>
-        </div>
-        <Link to="/eligibility" className="text-xs font-semibold text-blue-700 hover:text-blue-900 whitespace-nowrap flex items-center gap-1">
-          Check Eligibility <ArrowRight className="w-3.5 h-3.5" />
-        </Link>
-      </div>
-
-      {/* Document Explorer Card */}
-      <Card>
-        <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100">
+    <div className="space-y-6 max-w-4xl mx-auto pb-16">
+      {/* Page Header */}
+      <div className="bg-white border border-slate-200/90 rounded-xl p-5 sm:p-6 space-y-4 shadow-2xs">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <CardTitle>Registered Supporting Evidence</CardTitle>
-            <CardDescription>
-              Showing {filteredDocs.length} of {totalCount} files available for algorithmic requirement verification.
-            </CardDescription>
+            <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
+              My Documents
+            </h1>
+            <p className="text-xs sm:text-sm text-slate-600 mt-1">
+              Required documents across your roadmap. Preparing them on your computer is sufficient; server upload is optional.
+            </p>
           </div>
-          <div className="flex items-center gap-2">
-            <Filter className="w-4 h-4 text-slate-400" />
+
+          <div className="text-left sm:text-right shrink-0">
+            <span className="text-xs font-semibold text-slate-500 block">Readiness</span>
+            <span className="text-2xl font-bold text-slate-900">
+              {preparedCount} of {totalCount}
+            </span>
+            <span className="text-xs text-slate-400 block">
+              {prepPercentage}% ready
+            </span>
+          </div>
+        </div>
+
+        <div className="pt-1">
+          <ProgressBar value={prepPercentage} color="bg-blue-600" height="h-1.5" />
+        </div>
+      </div>
+
+      {notification && (
+        <div 
+          className={`p-3.5 rounded-lg text-xs font-medium flex items-center justify-between ${
+            notification.type === 'success' 
+              ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' 
+              : 'bg-rose-50 text-rose-800 border border-rose-200'
+          }`}
+        >
+          <span>{notification.text}</span>
+          <button 
+            onClick={() => setNotification(null)}
+            className="text-xs font-bold hover:opacity-70 ml-4"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {/* Filter and Search Bar */}
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-2.5 bg-white border border-slate-200/90 rounded-xl shadow-2xs">
+        <div className="relative w-full sm:w-64">
+          <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
+          <input
+            type="text"
+            placeholder="Search documents..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:bg-white focus:border-blue-500"
+          />
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+          <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg text-xs">
+            {['ALL', 'REQUIRED', 'PREPARED', 'MISSING'].map((st) => (
+              <button
+                key={st}
+                onClick={() => setFilterStatus(st)}
+                className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
+                  filterStatus === st 
+                    ? 'bg-white text-slate-900 shadow-2xs' 
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                {st === 'ALL' ? 'All' : st === 'REQUIRED' ? 'Required' : st === 'PREPARED' ? 'Prepared' : 'Missing'}
+              </button>
+            ))}
+          </div>
+
+          {allCategories.length > 1 && (
             <select
               value={filterCategory}
               onChange={(e) => setFilterCategory(e.target.value)}
-              aria-label="Filter documents by category"
-              className="text-xs font-medium bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+              className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-700 font-medium focus:outline-none"
             >
-              <option value="ALL">All Categories ({totalCount})</option>
-              {CATEGORIES.map(cat => (
-                <option key={cat} value={cat}>{cat} ({categorySummary[cat] || 0})</option>
+              <option value="ALL">All Categories</option>
+              {allCategories.map((c) => (
+                <option key={c} value={c}>{c}</option>
               ))}
             </select>
-          </div>
-        </CardHeader>
-
-        <CardContent className="p-0">
-          {loading ? (
-            <div className="p-12 text-center text-slate-400 flex flex-col items-center justify-center gap-3">
-              <RefreshCw className="w-6 h-6 animate-spin text-blue-600" />
-              <p className="text-sm font-medium">Loading indexed documents...</p>
-            </div>
-          ) : filteredDocs.length === 0 ? (
-            <div className="p-12 text-center">
-              <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mx-auto text-slate-400 mb-3">
-                <FileText className="w-6 h-6" />
-              </div>
-              <h4 className="text-base font-semibold text-slate-800">No documents found</h4>
-              <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
-                {filterCategory === 'ALL'
-                  ? 'Your vault is currently empty. Upload statutory certificates or click "Load Demo Proofs" to test with realistic startup artifacts.'
-                  : `No documents found in category "${filterCategory}".`}
-              </p>
-              <div className="mt-4 flex items-center justify-center gap-3">
-                <Button size="sm" variant="outline" icon={Sparkles} onClick={handleSeedDemo}>
-                  Load Demo Proofs
-                </Button>
-                <Button size="sm" variant="primary" icon={Upload} onClick={() => setShowUploadModal(true)}>
-                  Upload Document
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-slate-50/70 border-b border-slate-100 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                    <th className="py-3 px-6">Document Name</th>
-                    <th className="py-3 px-6">Regulatory Category</th>
-                    <th className="py-3 px-6">Pages / Size</th>
-                    <th className="py-3 px-6">Parsing Status</th>
-                    <th className="py-3 px-6 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 text-sm">
-                  {filteredDocs.map((doc) => (
-                    <tr key={doc.id} className="hover:bg-slate-50/60 transition-colors">
-                      <td className="py-4 px-6">
-                        <div className="flex items-center gap-3">
-                          <div className="p-2 bg-blue-50 text-blue-700 rounded-lg shrink-0">
-                            <FileText className="w-4 h-4" />
-                          </div>
-                          <div>
-                            <div className="font-semibold text-slate-900 flex items-center gap-2">
-                              {doc.original_filename}
-                            </div>
-                            <div className="text-[11px] text-slate-400 font-mono mt-0.5">
-                              ID: {doc.id} • Uploaded {doc.upload_date ? new Date(doc.upload_date).toLocaleDateString() : 'Active'}
-                            </div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="py-4 px-6">
-                        <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
-                          {doc.category}
-                        </span>
-                      </td>
-                      <td className="py-4 px-6 text-xs text-slate-600 font-medium">
-                        <span className="font-semibold text-slate-800">{doc.page_count} {doc.page_count === 1 ? 'page' : 'pages'}</span>
-                        <span className="text-slate-400 mx-1.5">•</span>
-                        <span>{formatFileSize(doc.file_size_bytes)}</span>
-                      </td>
-                      <td className="py-4 px-6">
-                        <StatusBadge status="Ready" size="sm" />
-                        <span className="text-[11px] text-slate-400 block mt-1">Available for Evidence Mapping</span>
-                      </td>
-                      <td className="py-4 px-6 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            onClick={() => handleDelete(doc.id, doc.original_filename)}
-                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                            title="Delete Document"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
+
+      {/* Compact Document List */}
+      {loading ? (
+        <div className="flex items-center justify-center min-h-[300px]">
+          <div className="flex flex-col items-center gap-2">
+            <RefreshCw className="w-6 h-6 text-slate-400 animate-spin" />
+            <p className="text-xs text-slate-500">Loading document checklist...</p>
+          </div>
+        </div>
+      ) : filteredChecklist.length === 0 ? (
+        <div className="p-8 text-center bg-white border border-slate-200 rounded-xl space-y-2">
+          <p className="text-xs text-slate-500">No documents match your filter.</p>
+          <button
+            onClick={() => { setFilterCategory('ALL'); setFilterStatus('ALL'); setSearchQuery(''); }}
+            className="text-xs text-blue-600 font-medium hover:underline"
+          >
+            Clear filters
+          </button>
+        </div>
+      ) : (
+        <div className="bg-white border border-slate-200/90 rounded-xl divide-y divide-slate-100 shadow-2xs overflow-hidden">
+          {filteredChecklist.map((item) => {
+            const isUploaded = item.preparation_status === 'UPLOADED' && item.uploaded_file;
+
+            return (
+              <div
+                key={item.id}
+                className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-slate-50/50 transition-colors"
+              >
+                {/* Document Information */}
+                <div className="space-y-1 min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-slate-900 truncate">
+                      {item.name}
+                    </span>
+                    <span className={`text-[10px] font-medium px-1.5 py-0.2 rounded shrink-0 ${
+                      item.is_required 
+                        ? 'bg-slate-100 text-slate-700' 
+                        : 'bg-slate-50 text-slate-400'
+                    }`}>
+                      {item.is_required ? 'Required' : 'Conditional'}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2 text-xs text-slate-500">
+                    <Link
+                      to="/roadmap"
+                      className="hover:text-blue-600 truncate"
+                    >
+                      Step {item.step_number}: {item.step_title}
+                    </Link>
+                    <span>•</span>
+                    <span className="text-slate-400">{item.category}</span>
+                  </div>
+
+                  {item.explanation && (
+                    <p className="text-xs text-slate-500 line-clamp-1">
+                      {item.explanation}
+                    </p>
+                  )}
+                </div>
+
+                {/* Status & Action Controls */}
+                <div className="flex items-center gap-2.5 shrink-0 self-start sm:self-center">
+                  <select
+                    value={item.preparation_status}
+                    onChange={(e) => handleUpdateStatus(item, e.target.value)}
+                    className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-800 font-medium focus:outline-none focus:border-blue-500"
+                  >
+                    <option value="NOT_PREPARED">Not Prepared</option>
+                    <option value="DRAFT">In Draft</option>
+                    <option value="PREPARED_LOCAL">Prepared on Computer</option>
+                    <option value="UPLOADED">Uploaded to Vault</option>
+                  </select>
+
+                  {/* If uploaded */}
+                  {isUploaded && item.uploaded_file && (
+                    <div className="flex items-center gap-1">
+                      <a
+                        href={api.getDocumentDownloadUrl(item.uploaded_file.id)}
+                        className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 transition-colors"
+                        title="Download file"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                      </a>
+                      <button
+                        onClick={() => handleDeleteUploadedFile(item.uploaded_file!.id, item.uploaded_file!.original_filename)}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                        title="Delete file"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
+
+                  {/* If not uploaded: optional upload trigger */}
+                  {!isUploaded && (
+                    <button
+                      onClick={() => openUploadForItem(item)}
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+                      title="Upload backup copy (optional)"
+                    >
+                      <Upload className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Upload Modal */}
       {showUploadModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl border border-slate-200 max-w-lg w-full p-6 animate-scaleIn">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-100">
-              <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                <Upload className="w-5 h-5 text-blue-600" />
-                Upload Supporting Evidence
-              </h3>
-              <button
-                onClick={() => setShowUploadModal(false)}
-                className="text-slate-400 hover:text-slate-600 text-sm font-semibold p-1"
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
+          <div className="bg-white border border-slate-200 rounded-xl max-w-md w-full p-6 space-y-4 shadow-lg animate-fadeIn">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+              <h2 className="text-sm font-semibold text-slate-900">
+                Upload Backup File
+              </h2>
+              <button 
+                onClick={() => { setShowUploadModal(false); setFileToUpload(null); }}
+                className="text-slate-400 hover:text-slate-600"
               >
-                ✕
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            <form onSubmit={handleUpload} className="mt-5 space-y-4">
+            <form onSubmit={handleUploadSubmit} className="space-y-4 text-xs">
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Document Category *
-                </label>
-                <select
-                  value={selectedCategory}
-                  onChange={(e) => setSelectedCategory(e.target.value)}
-                  className="w-full text-sm rounded-xl border border-slate-200 px-3 py-2.5 text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                >
-                  {CATEGORIES.map(cat => (
-                    <option key={cat} value={cat}>{cat}</option>
-                  ))}
-                </select>
-                <p className="text-[11px] text-slate-400 mt-1">
-                  Correct classification guarantees the automated rules engine maps the right clause to this proof.
-                </p>
+                <span className="text-slate-500 block mb-1">Document:</span>
+                <span className="font-semibold text-slate-800">
+                  {selectedChecklistItem?.name || 'Supporting Document'}
+                </span>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Select File (PDF or Image) *
+                <label className="text-slate-600 font-medium block mb-1">
+                  Choose File (PDF, PNG, JPG — max 15MB)
                 </label>
-                <div className="border-2 border-dashed border-slate-200 rounded-xl p-6 text-center hover:border-blue-400 transition-colors bg-slate-50/50">
-                  <input
-                    type="file"
-                    id="docFileInput"
-                    accept=".pdf,.png,.jpg,.jpeg"
-                    onChange={handleFileChange}
-                    className="hidden"
-                  />
-                  <label htmlFor="docFileInput" className="cursor-pointer block">
-                    <FileText className="w-8 h-8 text-blue-500 mx-auto mb-2" />
-                    <span className="text-sm font-semibold text-blue-700 hover:underline">
-                      {fileToUpload ? fileToUpload.name : 'Choose a file'}
-                    </span>
-                    <span className="text-xs text-slate-500 block mt-1">
-                      {fileToUpload ? `${formatFileSize(fileToUpload.size)} selected` : 'Supports PDF, PNG, JPG up to 16MB'}
-                    </span>
-                  </label>
-                </div>
+                <input
+                  type="file"
+                  accept=".pdf,.png,.jpg,.jpeg"
+                  onChange={(e) => setFileToUpload(e.target.files?.[0] || null)}
+                  className="w-full text-xs text-slate-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200 cursor-pointer"
+                />
               </div>
 
-              <div className="pt-4 flex items-center justify-end gap-3 border-t border-slate-100">
-                <Button
+              <p className="text-[11px] text-slate-400 leading-relaxed">
+                Files are stored privately. You are not required to upload confidential documents if you can submit them directly to the official portal.
+              </p>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
                   type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowUploadModal(false)}
+                  onClick={() => { setShowUploadModal(false); setFileToUpload(null); }}
+                  className="px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 font-medium"
                 >
                   Cancel
-                </Button>
-                <Button
+                </button>
+                <button
                   type="submit"
-                  variant="primary"
-                  size="sm"
-                  loading={uploading}
-                  disabled={!fileToUpload || uploading}
-                  icon={Upload}
+                  disabled={uploading || !fileToUpload}
+                  className="px-4 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium disabled:opacity-50"
                 >
-                  {uploading ? 'Parsing & Indexing...' : 'Upload & Index'}
-                </Button>
+                  {uploading ? 'Uploading...' : 'Upload'}
+                </button>
               </div>
             </form>
           </div>

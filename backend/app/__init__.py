@@ -8,8 +8,16 @@ def create_app(config_class=Config):
     app = Flask(__name__)
     app.config.from_object(config_class)
 
-    # Enable CORS for frontend Vite dev server and production
-    CORS(app, resources={r"/api/*": {"origins": "*"}}, supports_credentials=True)
+    # Enable CORS for frontend Vite dev server and configured production origins
+    CORS(app, resources={r"/api/*": {"origins": Config.CORS_ORIGINS}}, supports_credentials=True)
+
+    # Security Response Headers
+    @app.after_request
+    def set_security_headers(response):
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        return response
 
     # Initialize SQLite database and tables
     with app.app_context():
