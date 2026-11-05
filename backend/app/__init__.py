@@ -1,4 +1,5 @@
 import os
+import re
 from flask import Flask
 from flask_cors import CORS
 from app.config import Config
@@ -8,8 +9,23 @@ def create_app(config_class=Config):
     app = Flask(__name__)
     app.config.from_object(config_class)
 
-    # Enable CORS for frontend Vite dev server and configured production origins
-    CORS(app, resources={r"/api/*": {"origins": Config.CORS_ORIGINS}}, supports_credentials=True)
+    # Enable CORS with credentials support for frontend Vite dev server and Vercel production
+    allowed_origins = list(getattr(config_class, "CORS_ORIGINS", []))
+    default_patterns = [
+        re.compile(r"^https:\/\/.*\.vercel\.app$"),
+        re.compile(r"^http:\/\/localhost(:\d+)?$"),
+        re.compile(r"^http:\/\/127\.0\.0\.1(:\d+)?$")
+    ]
+    for pattern in default_patterns:
+        allowed_origins.append(pattern)
+
+    CORS(
+        app,
+        resources={r"/api/*": {"origins": allowed_origins}},
+        supports_credentials=True,
+        allow_headers=["Content-Type", "Authorization", "X-User-Id"],
+        methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+    )
 
     # Security Response Headers
     @app.after_request
