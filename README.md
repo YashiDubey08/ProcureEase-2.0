@@ -4,53 +4,47 @@
 
 **Don't just find tenders. Know if you can win them, and exactly what to do next.**
 
-## About the Project
+ProcureEase 2.0 is an AI-powered Tender-to-Action Intelligence Platform that helps startups assess tender eligibility, identify documentation gaps, and evaluate bid readiness.
 
-ProcureEase 2.0 is an AI-powered Tender-to-Action Intelligence Platform designed to help startups understand government tender requirements and evaluate their readiness before applying.
-
-The platform aims to simplify the tender application process by identifying eligibility requirements, matching them with company documents, highlighting missing information, and providing actionable guidance.
-
-## The Problem
-
-Government tender applications can be complicated, especially for startups. Understanding eligibility criteria, preparing documents, and identifying missing requirements can be time-consuming and confusing.
-
-## Our Solution
-
-ProcureEase 2.0 aims to make this process easier through intelligent tender analysis and document readiness assessment.
+## Live Demo
+[Launch ProcureEase 2.0](https://procure-ease-2-0.vercel.app/)
 
 ## Key Features
+- **Tender Requirement Extraction:** Extracts important conditions from tender PDFs.
+- **Eligibility Matching:** Identifies matched, partially matched, and missing requirements.
+- **Document Gap Analysis:** Highlights missing documents and required actions.
+- **Bid Readiness Score:** Evaluates startup preparation status.
+- **Pre-Bid Audit:** Identifies potential compliance gaps before submission.
+- **Company Roadmap:** Organizes regulatory preparation steps.
+- **My Documents:** Tracks required business documents.
 
-- **Tender Requirement Extraction:** Extract important eligibility requirements from tender documents.
-- **Eligibility Matching:** Compare tender requirements with startup information.
-- **Document Gap Analysis:** Identify missing or incomplete documents.
-- **Bid Readiness Score:** Provide an overview of preparedness for a tender.
-- **Actionable Guidance:** Suggest next steps to address identified gaps.
-- **Pre-Bid Audit:** Help review readiness before submitting an application.
+## Tech Stack
+- **Frontend:** React, Vite, Tailwind CSS
+- **Backend:** Python, Flask
+- **Database:** SQLite
+- **PDF Processing:** PyMuPDF
+- **Authentication:** Signed Tokens, Flask Sessions
+- **Deployment:** Vercel, Render
+- **Version Control:** Git and GitHub
 
-## How It Works
-
-1. Enter startup information.
-2. Upload a government tender PDF.
-3. Provide relevant company documents.
-4. Analyse tender requirements.
-5. Identify matching, partial, and missing requirements.
-6. Review the bid readiness assessment and recommended actions.
+## Deployment
+- Frontend hosted on Vercel.
+- Backend hosted on Render.
+- REST API communication between frontend and backend.
+- Token-based authentication for protected resources.
 
 ## Project Vision
-
-To make government procurement more accessible to startups by turning complex tender requirements into clear, actionable steps.
-
-## Technologies Used
-
-*To be updated with the technologies used in the implemented version.*
+Making government procurement simpler and more accessible for startups through intelligent tender analysis, eligibility assessment, and actionable bid preparation guidance.
 
 ## Future Scope
-
+- Advanced AI-powered tender analysis.
+- Government portal integration.
+- Real-time tender notifications.
+- Automated document validation.
 - Tender change detection.
-- Improved eligibility analysis.
-- Expanded document verification.
-- Procurement progress tracking.
+
+## Project Status
+**Deployed | Continuous Development**
 
 ---
-
-**ProcureEase 2.0 — Tender-to-Action Intelligence.**
+*ProcureEase 2.0 — From Tender Discovery to Bid Readiness.*
