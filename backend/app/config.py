@@ -9,10 +9,15 @@ class Config:
     PROJECT_NAME = "ProcureEase 2.0"
     SECRET_KEY = os.getenv("SECRET_KEY", "procureease-2-secure-random-key-prod-2026")
     
-    # Session Cookie Security
+    # Session Cookie Security (Cross-Site / CORS compatible in production)
+    _is_prod = (
+        os.getenv("FLASK_ENV") == "production" 
+        or os.getenv("RENDER") is not None 
+        or os.getenv("FLASK_DEBUG", "True").lower() not in ("true", "1", "yes")
+    )
     SESSION_COOKIE_HTTPONLY = True
-    SESSION_COOKIE_SAMESITE = "Lax"
-    SESSION_COOKIE_SECURE = os.getenv("FLASK_ENV") == "production"
+    SESSION_COOKIE_SAMESITE = "None" if _is_prod else "Lax"
+    SESSION_COOKIE_SECURE = True if _is_prod else False
     PERMANENT_SESSION_LIFETIME = 7 * 24 * 60 * 60 # 7 days
 
     # SQLite Database Configuration (with PostgreSQL URL compatibility for Render/Supabase)

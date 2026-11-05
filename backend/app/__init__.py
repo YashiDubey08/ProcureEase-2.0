@@ -23,7 +23,8 @@ def create_app(config_class=Config):
         app,
         resources={r"/api/*": {"origins": allowed_origins}},
         supports_credentials=True,
-        allow_headers=["Content-Type", "Authorization", "X-User-Id"],
+        allow_headers=["Content-Type", "Authorization", "X-User-Id", "X-Auth-Token"],
+        expose_headers=["Content-Disposition", "Authorization"],
         methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"]
     )
 

@@ -10,7 +10,8 @@ from app.models.journey import RoadmapStep, ApplicationRecord
 from app.services.security import (
     get_trusted_user_id,
     require_auth,
-    rate_limit
+    rate_limit,
+    generate_auth_token
 )
 from app.services.roadmap_engine import sync_roadmap_for_user
 
@@ -83,14 +84,16 @@ def register():
 
     db_session.commit()
 
-    # Set secure server-side session
+    # Set secure server-side session and auth token
     session["user_id"] = user.id
+    token = generate_auth_token(user.id)
 
     return jsonify({
         "success": True,
         "message": "Account created successfully.",
         "user": user.to_dict(),
-        "startup": startup.to_dict()
+        "startup": startup.to_dict(),
+        "token": token
     }), 201
 
 @auth_bp.route("/login", methods=["POST"])
@@ -109,6 +112,7 @@ def login():
         return jsonify({"error": "Invalid email or password."}), 401
 
     session["user_id"] = user.id
+    token = generate_auth_token(user.id)
 
     startup = db_session.query(Startup).filter_by(user_id=user.id).first()
 
@@ -116,7 +120,8 @@ def login():
         "success": True,
         "message": f"Welcome back, {user.name}!",
         "user": user.to_dict(),
-        "startup": startup.to_dict() if startup else None
+        "startup": startup.to_dict() if startup else None,
+        "token": token
     }), 200
 
 @auth_bp.route("/logout", methods=["POST"])
@@ -139,11 +144,13 @@ def me():
         }), 200
 
     startup = db_session.query(Startup).filter_by(user_id=user.id).first()
+    token = generate_auth_token(user.id)
 
     return jsonify({
         "authenticated": True,
         "user": user.to_dict(),
-        "startup": startup.to_dict() if startup else None
+        "startup": startup.to_dict() if startup else None,
+        "token": token
     }), 200
 
 @auth_bp.route("/forgot-password", methods=["POST"])
@@ -401,10 +408,12 @@ def activate_demo():
         db_session.commit()
 
     session["user_id"] = demo_user.id
+    token = generate_auth_token(demo_user.id)
 
     return jsonify({
         "success": True,
         "message": "Demo mode activated as TechNova Solutions.",
         "user": demo_user.to_dict(),
-        "startup": demo_startup.to_dict()
+        "startup": demo_startup.to_dict(),
+        "token": token
     }), 200

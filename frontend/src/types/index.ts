@@ -416,4 +416,5 @@ export interface AuthResponse {
   user: User | null;
   startup?: StartupProfile | null;
   authenticated?: boolean;
+  token?: string;
 }

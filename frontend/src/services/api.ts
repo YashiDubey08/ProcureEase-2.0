@@ -16,9 +16,42 @@ import type {
 } from '../types';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
+const TOKEN_KEY = 'procureease_auth_token';
+
+export const authStorage = {
+  getToken(): string | null {
+    try {
+      return localStorage.getItem(TOKEN_KEY);
+    } catch {
+      return null;
+    }
+  },
+  setToken(token: string) {
+    try {
+      if (token) {
+        localStorage.setItem(TOKEN_KEY, token);
+      }
+    } catch {
+      // ignore
+    }
+  },
+  clearToken() {
+    try {
+      localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem('procureease_user_id');
+    } catch {
+      // ignore
+    }
+  }
+};
 
 async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
   const headers = new Headers(options?.headers || {});
+
+  const token = authStorage.getToken();
+  if (token && !headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
 
   const response = await fetch(url, {
     ...options,
@@ -43,37 +76,57 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
 export const api = {
   // Authentication & Account Security
   async register(data: { name: string; email: string; password: string; company_name: string }): Promise<AuthResponse> {
-    return fetchJson(`${API_BASE_URL}/auth/register`, {
+    const res = await fetchJson<AuthResponse>(`${API_BASE_URL}/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
     });
+    if (res.token) {
+      authStorage.setToken(res.token);
+    }
+    return res;
   },
 
   async login(data: { email: string; password: string }): Promise<AuthResponse> {
-    return fetchJson(`${API_BASE_URL}/auth/login`, {
+    const res = await fetchJson<AuthResponse>(`${API_BASE_URL}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
     });
+    if (res.token) {
+      authStorage.setToken(res.token);
+    }
+    return res;
   },
 
   async logout(): Promise<{ success: boolean; message: string }> {
-    return fetchJson(`${API_BASE_URL}/auth/logout`, {
-      method: 'POST'
-    });
+    try {
+      return await fetchJson(`${API_BASE_URL}/auth/logout`, {
+        method: 'POST'
+      });
+    } finally {
+      authStorage.clearToken();
+    }
   },
 
-  async getMe(): Promise<{ authenticated: boolean; user: User | null; startup: StartupProfile | null }> {
-    return fetchJson(`${API_BASE_URL}/auth/me`);
+  async getMe(): Promise<{ authenticated: boolean; user: User | null; startup: StartupProfile | null; token?: string }> {
+    const res = await fetchJson<{ authenticated: boolean; user: User | null; startup: StartupProfile | null; token?: string }>(`${API_BASE_URL}/auth/me`);
+    if (res.token) {
+      authStorage.setToken(res.token);
+    }
+    return res;
   },
 
   async loginDemo(): Promise<AuthResponse> {
-    return fetchJson(`${API_BASE_URL}/auth/demo`, {
+    const res = await fetchJson<AuthResponse>(`${API_BASE_URL}/auth/demo`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({})
     });
+    if (res.token) {
+      authStorage.setToken(res.token);
+    }
+    return res;
   },
 
   async forgotPassword(email: string): Promise<{ success: boolean; message: string; dev_reset_token?: string }> {
@@ -176,7 +229,9 @@ export const api = {
   },
 
   getDocumentDownloadUrl(documentId: string): string {
-    return `${API_BASE_URL}/documents/${documentId}/download`;
+    const token = authStorage.getToken();
+    const query = token ? `?token=${encodeURIComponent(token)}` : '';
+    return `${API_BASE_URL}/documents/${documentId}/download${query}`;
   },
 
   // Personalized Roadmap

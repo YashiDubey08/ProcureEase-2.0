@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { api } from '../services/api';
+import { api, authStorage } from '../services/api';
 import type { User, StartupProfile } from '../types';
 
 interface AuthContextType {
@@ -34,11 +34,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(res.user);
         setStartup(res.startup || null);
       } else {
+        authStorage.clearToken();
         setUser(null);
         setStartup(null);
       }
     } catch (err) {
       console.warn('Authentication check failed:', err);
+      authStorage.clearToken();
       setUser(null);
       setStartup(null);
     } finally {
@@ -95,6 +97,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch {
       // ignore
     } finally {
+      authStorage.clearToken();
       setUser(null);
       setStartup(null);
     }
@@ -135,6 +138,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const deleteAccount = async (password: string) => {
     await api.deleteAccount(password);
+    authStorage.clearToken();
     setUser(null);
     setStartup(null);
   };

@@ -11,8 +11,32 @@ from pathlib import Path
 from collections import defaultdict
 from threading import Lock
 from flask import session, request, jsonify
+from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
+from app.config import Config
 from app.database import db_session
 from app.models.user import User
+
+AUTH_SALT = "procureease-token-salt-2026"
+TOKEN_MAX_AGE = 14 * 24 * 3600 # 14 days token validity
+
+def get_auth_serializer():
+    return URLSafeTimedSerializer(Config.SECRET_KEY, salt=AUTH_SALT)
+
+def generate_auth_token(user_id: str) -> str:
+    """Generates a cryptographically signed, timestamped authentication token."""
+    s = get_auth_serializer()
+    return s.dumps({"user_id": str(user_id)})
+
+def verify_auth_token(token: str) -> str | None:
+    """Verifies cryptographic signature and expiry of token. Returns user_id or None."""
+    if not token or not isinstance(token, str):
+        return None
+    s = get_auth_serializer()
+    try:
+        data = s.loads(token.strip(), max_age=TOKEN_MAX_AGE)
+        return data.get("user_id")
+    except (BadSignature, SignatureExpired, Exception):
+        return None
 
 # Maximum document file size: 15 MB
 MAX_DOCUMENT_SIZE_BYTES = 15 * 1024 * 1024
@@ -84,11 +108,28 @@ def rate_limit(max_requests=5, window_seconds=60):
 
 def get_trusted_user_id() -> str | None:
     """
-    Obtains the trusted user ID ONLY from the server-side session.
-    Never trusts caller-supplied headers, request bodies, or URLs.
-    Verifies that the user actually exists in the database.
+    Obtains the trusted user ID from:
+    1. Server-side session (session['user_id'])
+    2. Cryptographically signed Bearer token in Authorization header
+    3. X-Auth-Token header
+    4. Query parameter (?token=...) for direct browser download links
+
+    Validates signature with SECRET_KEY and verifies user exists in database.
     """
     user_id = session.get("user_id")
+
+    if not user_id:
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            token = auth_header[7:].strip()
+            user_id = verify_auth_token(token)
+        elif request.headers.get("X-Auth-Token"):
+            token = request.headers.get("X-Auth-Token").strip()
+            user_id = verify_auth_token(token)
+        elif request.args.get("token"):
+            token = request.args.get("token").strip()
+            user_id = verify_auth_token(token)
+
     if not user_id:
         return None
 
