@@ -1,3 +1,4 @@
+![ProcureEase 2.0 Banner](banner.png)
 # ProcureEase 2.0
 ### The Bid Readiness Engine
 
