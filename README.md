@@ -8,6 +8,22 @@ ProcureEase 2.0 is an AI-powered Tender-to-Action Intelligence Platform that hel
 
 ## Live Demo
 [Launch ProcureEase 2.0](https://procure-ease-2-0.vercel.app/)
+## Project Screenshots
+
+### Homepage
+![Homepage](screenshots/home.png)
+
+### Dashboard
+![Dashboard](screenshots/dashboard.png)
+
+### Company Roadmap
+![Company Roadmap](screenshots/roadmap.png)
+
+### My Documents
+![My Documents](screenshots/documents.png)
+
+### Tender Analysis
+![Tender Analysis](screenshots/tender-analysis.png)
 
 ## Key Features
 - **Tender Requirement Extraction:** Extracts important conditions from tender PDFs.
